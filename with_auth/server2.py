@@ -1,7 +1,7 @@
 import threading
 import pymysql as sqltor
 import socket
-import bcrypt
+import hashlib
 
 # Connect to MySQL database
 mycon = sqltor.connect(
@@ -102,7 +102,7 @@ def ans_q(client, alias):
         client.send("Correct answer!! You gained one point.".encode('utf-8'))
         cursor.execute("UPDATE LEADERBOARD SET score = score + 1 WHERE name = %s;", (alias,))
     else:
-        client.send(f'Uh oh wrong answer, the correct answer was {real}!'.encode('utf-8'))
+        client.send(f'Wrong answer, the correct answer was {real}!'.encode('utf-8'))
     cursor.execute("UPDATE LEADERBOARD SET last_attempted = %s where name = %s;", (attempted + 1, alias))
     mycon.commit()
 
@@ -112,7 +112,10 @@ def register_user(client):
         username = client.recv(1024).decode('utf-8')
         client.send('Enter new password:'.encode('utf-8'))
         password = client.recv(1024).decode('utf-8')
-        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        
+        # Hash password using SHA-256
+        hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
+        
         try:
             cursor.execute('INSERT INTO details (username, password) VALUES (%s, %s)', (username, hashed_password))
             mycon.commit()
@@ -127,9 +130,13 @@ def authenticate_user(client):
         username = client.recv(1024).decode('utf-8')
         client.send('Enter password:'.encode('utf-8'))
         password = client.recv(1024).decode('utf-8')
+        
+        # Hash password using SHA-256 for comparison
+        hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
+        
         cursor.execute('SELECT password FROM details WHERE username = %s', (username,))
         result = cursor.fetchone()
-        if result and bcrypt.checkpw(password.encode('utf-8'), result[0].encode('utf-8')):
+        if result and hashed_password == result[0]:
             client.send('Login successful!'.encode('utf-8'))
             return username
         else:
